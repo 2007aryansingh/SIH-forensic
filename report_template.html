@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Email Forensic Analysis Report</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      color: #1f2937;
+      font-size: 10pt;
+      line-height: 1.4;
+      margin: 0;
+    }
+
+    h1, h2, h3 {
+      color: #111827;
+      margin-top: 0;
+    }
+
+    .section {
+      page-break-inside: avoid;
+      margin-bottom: 18px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 12px;
+      background: #ffffff;
+    }
+
+    .status-pass { color: #15803d; font-weight: bold; }
+    .status-fail { color: #b91c1c; font-weight: bold; }
+    .status-warning { color: #b45309; font-weight: bold; }
+    .status-neutral { color: #475569; font-weight: bold; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+
+    th, td {
+      border: 1px solid #d1d5db;
+      padding: 6px;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #f3f4f6;
+    }
+
+    .metadata, .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .summary-grid {
+      margin-top: 12px;
+    }
+
+    .pill {
+      display: inline-block;
+      background: #e5e7eb;
+      padding: 4px 8px;
+      border-radius: 10px;
+      font-size: 9pt;
+      font-weight: bold;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Project Sentinel</h1>
+  <h2>Email Forensic Analysis Report</h2>
+
+  <div class="section">
+    <h3>Case Summary</h3>
+    <div class="summary-grid">
+      <div><strong>Email ID:</strong> {{ email_id }}</div>
+      <div><strong>Report ID:</strong> {{ report_id }}</div>
+      <div><strong>Generated:</strong> {{ generated_at }}</div>
+      <div><strong>Generator:</strong> {{ generator_version }}</div>
+      <div><strong>Risk Score:</strong> {{ risk_score }}/100</div>
+      <div><strong>Risk Level:</strong> {{ risk_level }}</div>
+      <div colspan="2"><strong>Verdict:</strong> {{ verdict }}</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Evidence Integrity</h3>
+    <div class="metadata">
+      <div><strong>Evidence ID:</strong> {{ evidence.evidence_id }}</div>
+      <div><strong>Hash Algorithm:</strong> {{ evidence.hash_algorithm }}</div>
+      <div><strong>Original SHA-256:</strong> {{ evidence.sha256 }}</div>
+      <div><strong>Captured At:</strong> {{ evidence.captured_at }}</div>
+      <div><strong>Captured By:</strong> {{ evidence.captured_by }}</div>
+      <div><strong>Original Size:</strong> {{ evidence.content_length }} bytes</div>
+      <div><strong>Integrity Status:</strong> {{ evidence.integrity_status }}</div>
+      <div><strong>Source:</strong> {{ evidence.source or 'unknown' }}</div>
+    </div>
+    <p>This hash identifies the raw email content captured at ingestion. Any change to the captured bytes will produce a different SHA-256 value.</p>
+  </div>
+
+  <div class="section">
+    <h3>Sender Details</h3>
+    <div class="metadata">
+      <div><strong>Display Name:</strong> {{ sender.display_name or 'unknown' }}</div>
+      <div><strong>From:</strong> {{ sender.from_address or sender.from or 'unknown' }}</div>
+      <div><strong>Reply-To:</strong> {{ sender.reply_to or 'unknown' }}</div>
+      <div><strong>Return-Path:</strong> {{ sender.return_path or 'unknown' }}</div>
+      <div><strong>Subject:</strong> {{ sender.subject or headers.subject or 'unknown' }}</div>
+      <div><strong>Recipient:</strong> {{ sender.to_address or 'unknown' }}</div>
+      <div><strong>Sender IP:</strong> {{ sender.sender_ip or origin_trace.probable_origin_ip or 'unknown' }}</div>
+      <div><strong>Sending Domain:</strong> {{ domain_intel.domain or sender.sending_domain or 'unknown' }}</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Authentication Analysis</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Check</th>
+          <th>Result</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>SPF</td>
+          <td class="status-{{ 'pass' if authentication.spf|lower == 'pass' else 'fail' if authentication.spf|lower == 'fail' else 'warning' if authentication.spf|lower in ['neutral','none'] else 'neutral' }}">{{ authentication.spf or 'NOT_CHECKED' }}</td>
+          <td>{{ authentication.spf_details or 'No SPF result recorded.' }}</td>
+        </tr>
+        <tr>
+          <td>DKIM</td>
+          <td class="status-{{ 'pass' if authentication.dkim|lower == 'pass' else 'fail' if authentication.dkim|lower == 'fail' else 'warning' if authentication.dkim|lower in ['neutral','none'] else 'neutral' }}">{{ authentication.dkim or 'NOT_CHECKED' }}</td>
+          <td>{{ authentication.dkim_details or 'No DKIM result recorded.' }}</td>
+        </tr>
+        <tr>
+          <td>DMARC</td>
+          <td class="status-{{ 'pass' if authentication.dmarc|lower == 'pass' else 'fail' if authentication.dmarc|lower == 'fail' else 'warning' if authentication.dmarc|lower in ['neutral','none'] else 'neutral' }}">{{ authentication.dmarc or 'NOT_CHECKED' }}</td>
+          <td>{{ authentication.dmarc_details or 'No DMARC result recorded.' }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Relay / Origin Trace</h3>
+    {% if origin_trace %}
+      <div class="metadata">
+        <div><strong>Probable Origin IP:</strong> {{ origin_trace.probable_origin_ip or origin_trace.origin_ip or 'unknown' }}</div>
+        <div><strong>Confidence:</strong> {{ origin_trace.confidence or 'unknown' }}</div>
+        <div><strong>Status:</strong> {{ origin_trace.status or 'not_available' }}</div>
+        <div><strong>Reason:</strong> {{ origin_trace.reason or 'No origin reason recorded.' }}</div>
+      </div>
+    {% else %}
+      <p>No relay/origin trace available.</p>
+    {% endif %}
+  </div>
+
+  <div class="section">
+    <h3>Geolocation</h3>
+    <div class="metadata">
+      <div><strong>IP:</strong> {{ origin_trace.probable_origin_ip or 'unknown' }}</div>
+      <div><strong>Country:</strong> {{ origin_trace.country or 'unknown' }}</div>
+      <div><strong>City:</strong> {{ origin_trace.city or 'unknown' }}</div>
+      <div><strong>ISP / Organization:</strong> {{ origin_trace.isp or 'unknown' }}</div>
+      <div><strong>ASN:</strong> {{ origin_trace.asn or 'unknown' }}</div>
+      <div><strong>VPN:</strong> {{ origin_trace.vpn or 'unknown' }}</div>
+      <div><strong>TOR:</strong> {{ origin_trace.tor or 'unknown' }}</div>
+      <div><strong>Hosting:</strong> {{ origin_trace.hosting or 'unknown' }}</div>
+    </div>
+    <p>IP geolocation identifies the registered network location and does not prove the physical location or identity of the sender.</p>
+  </div>
+
+  <div class="section">
+    <h3>Domain Intelligence</h3>
+    <div class="metadata">
+      <div><strong>Domain:</strong> {{ domain_intel.domain or 'unknown' }}</div>
+      <div><strong>Registration Date:</strong> {{ domain_intel.registration_date or 'unknown' }}</div>
+      <div><strong>Registrar:</strong> {{ domain_intel.registrar or 'unknown' }}</div>
+      <div><strong>Lookalike Match:</strong> {{ domain_intel.brand_lookalike or 'none' }}</div>
+      <div><strong>Similarity:</strong> {{ domain_intel.similarity or 'unknown' }}</div>
+      <div><strong>Reputation:</strong> {{ domain_intel.reputation or 'unknown' }}</div>
+    </div>
+    {% if domain_intel.risk_indicators %}
+      <ul>
+        {% for item in domain_intel.risk_indicators %}
+          <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No distinct domain risk indicators were identified.</p>
+    {% endif %}
+  </div>
+
+  <div class="section">
+    <h3>Extracted Indicators</h3>
+    {% if indicators %}
+      <ul>
+        {% for indicator in indicators %}
+          <li><strong>{{ indicator.type or 'indicator' }}:</strong> {{ indicator.value }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No indicators extracted.</p>
+    {% endif %}
+  </div>
+
+  <div class="section">
+    <h3>MITRE ATT&CK Mappings</h3>
+    {% if mitre_matches %}
+      <ul>
+        {% for item in mitre_matches %}
+          <li><strong>{{ item.technique_id or 'N/A' }} — {{ item.technique_name or 'Unknown' }}</strong><br />Evidence: {{ item.evidence or 'No evidence provided.' }}<br />Confidence: {{ item.confidence or 'unknown' }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No ATT&CK technique mappings available.</p>
+    {% endif %}
+  </div>
+
+  <div class="section">
+    <h3>Investigation Timeline</h3>
+    {% if timeline %}
+      <ul>
+        {% for item in timeline %}
+          <li>{{ item.time or 'unknown' }} — {{ item.event or item.description or 'Event recorded' }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No timeline events recorded.</p>
+    {% endif %}
+  </div>
+
+  <div class="section">
+    <h3>Investigation Limitations</h3>
+    {% if limitations %}
+      <ul>
+        {% for item in limitations %}
+          <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No limitations were recorded for this case.</p>
+    {% endif %}
+  </div>
+</body>
+</html>
